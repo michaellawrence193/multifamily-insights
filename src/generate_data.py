@@ -20,6 +20,7 @@ Run it from the project root:
     python src/generate_data.py
 """
 
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -267,18 +268,21 @@ def make_work_orders(lease_work_order_counts: dict) -> pd.DataFrame:
 # tests catch all of them -- a "known answer" for our data quality suite.
 
 def plant_data_quality_issues(properties, units, residents, leases, work_orders):
-    issues = []
+    issues = []        # human-readable summary
+    answer_key = {}    # machine-readable: issue -> affected record IDs (used by tests)
 
     # (a) Duplicate rows: a lease exported twice (a classic sync/ETL bug)
     dupes = leases.sample(5, random_state=SEED)
     leases = pd.concat([leases, dupes], ignore_index=True)
     issues.append(f"5 duplicated lease rows: {sorted(dupes.lease_id)}")
+    answer_key["duplicate_leases"] = sorted(dupes.lease_id)
 
     # (b) Orphan foreign key: leases pointing at a unit that doesn't exist
     #     (unit was deleted or renumbered in the source system)
     orphan_idx = leases.sample(3, random_state=SEED + 1).index
     leases.loc[orphan_idx, "unit_id"] = "P009-1001"
     issues.append(f"3 leases referencing non-existent unit P009-1001: {sorted(leases.loc[orphan_idx, 'lease_id'])}")
+    answer_key["orphan_unit_leases"] = sorted(leases.loc[orphan_idx, "lease_id"])
 
     # (c) Impossible dates: lease ends before it starts (data-entry typo)
     bad_date_idx = leases.sample(4, random_state=SEED + 2).index
@@ -286,21 +290,25 @@ def plant_data_quality_issues(properties, units, residents, leases, work_orders)
         pd.to_datetime(leases.loc[bad_date_idx, "lease_start_date"]) - pd.Timedelta(days=30)
     ).dt.date
     issues.append(f"4 leases ending before they start: {sorted(leases.loc[bad_date_idx, 'lease_id'])}")
+    answer_key["end_before_start_leases"] = sorted(leases.loc[bad_date_idx, "lease_id"])
 
     # (d) Invalid values: $0 and negative rents
     bad_rent_idx = leases.sample(3, random_state=SEED + 3).index
     leases.loc[bad_rent_idx, "monthly_rent"] = [0, -1450.00, 0]
     issues.append(f"3 leases with $0 or negative rent: {sorted(leases.loc[bad_rent_idx, 'lease_id'])}")
+    answer_key["invalid_rent_leases"] = sorted(leases.loc[bad_rent_idx, "lease_id"])
 
     # (e) Missing values: resident emails never collected
     missing_email_idx = residents.sample(25, random_state=SEED + 4).index
     residents.loc[missing_email_idx, "email"] = None
     issues.append("25 residents with missing email")
+    answer_key["missing_email_residents"] = sorted(residents.loc[missing_email_idx, "resident_id"])
 
     # (f) Inconsistent formatting: the same state written different ways
     properties.loc[properties.property_id == "P003", "state"] = "ga"
     properties.loc[properties.property_id == "P006", "state"] = "Texas"
     issues.append("2 properties with non-standard state codes ('ga', 'Texas')")
+    answer_key["nonstandard_state_properties"] = ["P003", "P006"]
 
     # (g) Logically impossible: work order completed before it was opened
     wo_idx = work_orders[work_orders.status == "Completed"].sample(6, random_state=SEED + 5).index
@@ -308,8 +316,9 @@ def plant_data_quality_issues(properties, units, residents, leases, work_orders)
         pd.to_datetime(work_orders.loc[wo_idx, "opened_date"]) - pd.Timedelta(days=3)
     ).dt.date
     issues.append(f"6 work orders completed before opened: {sorted(work_orders.loc[wo_idx, 'work_order_id'])}")
+    answer_key["completed_before_opened_work_orders"] = sorted(work_orders.loc[wo_idx, "work_order_id"])
 
-    return properties, units, residents, leases, work_orders, issues
+    return properties, units, residents, leases, work_orders, issues, answer_key
 
 
 # ---------------------------------------------------------------------------
@@ -322,7 +331,7 @@ def main():
     leases, residents, wo_counts = make_leases_and_residents(units)
     work_orders = make_work_orders(wo_counts)
 
-    properties, units, residents, leases, work_orders, issues = plant_data_quality_issues(
+    properties, units, residents, leases, work_orders, issues, answer_key = plant_data_quality_issues(
         properties, units, residents, leases, work_orders
     )
 
@@ -340,6 +349,7 @@ def main():
 
     # Save the answer key for Phase 3
     (OUTPUT_DIR / "_planted_issues.txt").write_text("\n".join(issues) + "\n")
+    (OUTPUT_DIR / "_planted_issues.json").write_text(json.dumps(answer_key, indent=2))
     print(f"\nPlanted {len(issues)} data quality issues (see data/raw/_planted_issues.txt)")
     print(f"Data written to {OUTPUT_DIR}")
 

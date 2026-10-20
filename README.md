@@ -4,7 +4,7 @@ An end-to-end analytics engineering project for a fictional 8-property, 960-unit
 apartment portfolio: from messy source-system data to tested data models, a
 lease-renewal prediction model, and an interactive dashboard.
 
-> **Status:** Phase 2 of 6 complete — source data and SQL data models.
+> **Status:** Phase 3 of 6 complete — source data, SQL data models, and automated data quality tests.
 
 ## Why this project
 
@@ -21,7 +21,7 @@ prediction → a product people use to decide.**
 |---|---|---|---|
 | 1 | Generate realistic source data, with planted data quality issues | Python, pandas, Faker | ✅ |
 | 2 | Model it into clean fact and dimension tables, with documented grain and keys | SQL, DuckDB | ✅ |
-| 3 | Automated data quality tests that catch every planted issue | pytest | ⬜ |
+| 3 | Automated data quality tests that catch every planted issue | pytest | ✅ |
 | 4 | Predict which residents are at risk of not renewing | scikit-learn | ⬜ |
 | 5 | Interactive dashboard: occupancy, rent trends, renewal risk | Streamlit | ⬜ |
 | 6 | Let an AI assistant query the portfolio through an MCP server | MCP | ⬜ |
@@ -85,6 +85,26 @@ raw  ──►  staging  ──►  intermediate  ──►  marts
 first leases are staggered through 2022. Leases rejected by validation can make
 a unit look vacant for months it was really occupied.
 
+## Data quality tests
+
+`pytest` runs 40 tests against the warehouse in under a second. Each one is a
+SQL query that should return zero problem rows.
+
+| Test file | What it checks |
+|---|---|
+| `test_marts.py` | **Grain** (keys unique and not null), **referential integrity** (no orphan foreign keys), **accepted values**, **business rules** (no backwards dates, no overlapping leases), and **reconciliation** (staged rows = mart rows + rejected rows) |
+| `test_planted_issues.py` | **Known-answer tests:** the pipeline caught *exactly* the records the generator corrupted — compared by ID, not just count, so a check can't pass by catching the wrong records |
+| `test_governance.py` | No PII columns in any mart table |
+
+Each planted issue gets the handling it deserves:
+
+| Issue | Handling | Where |
+|---|---|---|
+| Duplicate rows | **Fixed** — deduplicated | `stg_leases` |
+| Non-standard state codes | **Fixed** — standardized | `stg_properties` |
+| Missing emails | **Kept and surfaced** — incomplete, not wrong | `dim_residents.has_email_on_file` |
+| Orphan units, backwards dates, invalid rent | **Quarantined** with a reason | `audit.rejected_records` |
+
 ## Getting started
 
 ```powershell
@@ -93,6 +113,7 @@ python -m venv .venv
 pip install -r requirements.txt
 python src/generate_data.py      # 1. create the raw source data
 python src/build_models.py       # 2. build the warehouse
+pytest                           # 3. run the data quality tests
 
 # Explore with any SQL query:
 python src/query.py "select * from marts.dim_properties"
