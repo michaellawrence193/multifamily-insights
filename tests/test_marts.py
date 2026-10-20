@@ -105,6 +105,12 @@ BUSINESS_RULES = [
           on a.unit_id = b.unit_id and a.lease_id < b.lease_id
          and a.lease_start_date <= coalesce(b.move_out_date, b.lease_end_date)
          and b.lease_start_date <= coalesce(a.move_out_date, a.lease_end_date)"""),
+    ("rent is within a plausible range of market rent",
+        """select l.lease_id
+        from marts.fct_leases l
+        join marts.dim_units u on u.unit_id = l.unit_id
+        where l.monthly_rent > u.market_rent * 2
+        or l.monthly_rent < u.market_rent / 2"""),
 ]
 
 
