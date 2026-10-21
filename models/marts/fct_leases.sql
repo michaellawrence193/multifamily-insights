@@ -13,6 +13,7 @@ select
     l.move_out_date,
     l.lease_status,
     l.is_renewal,
+    l.renewal_offer_pct,
     -- Rent change vs. this resident's previous lease in the same unit.
     -- Null for a resident's first lease (nothing to compare to).
     round(

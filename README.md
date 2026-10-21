@@ -4,7 +4,7 @@ An end-to-end analytics engineering project for a fictional 8-property, 960-unit
 apartment portfolio: from messy source-system data to tested data models, a
 lease-renewal prediction model, and an interactive dashboard.
 
-> **Status:** Phase 3 of 6 complete — source data, SQL data models, and automated data quality tests.
+> **Status:** Phase 4 of 6 complete — source data, SQL models, data quality tests, and a lease-renewal prediction model.
 
 ## Why this project
 
@@ -22,7 +22,7 @@ prediction → a product people use to decide.**
 | 1 | Generate realistic source data, with planted data quality issues | Python, pandas, Faker | ✅ |
 | 2 | Model it into clean fact and dimension tables, with documented grain and keys | SQL, DuckDB | ✅ |
 | 3 | Automated data quality tests that catch every planted issue | pytest | ✅ |
-| 4 | Predict which residents are at risk of not renewing | scikit-learn | ⬜ |
+| 4 | Predict which residents are at risk of not renewing | scikit-learn | ✅ |
 | 5 | Interactive dashboard: occupancy, rent trends, renewal risk | Streamlit | ⬜ |
 | 6 | Let an AI assistant query the portfolio through an MCP server | MCP | ⬜ |
 
@@ -87,7 +87,7 @@ a unit look vacant for months it was really occupied.
 
 ## Data quality tests
 
-`pytest` runs 40 tests against the warehouse in under a second. Each one is a
+`pytest` runs 47 tests against the warehouse in under a second. Each one is a
 SQL query that should return zero problem rows.
 
 | Test file | What it checks |
@@ -95,6 +95,7 @@ SQL query that should return zero problem rows.
 | `test_marts.py` | **Grain** (keys unique and not null), **referential integrity** (no orphan foreign keys), **accepted values**, **business rules** (no backwards dates, no overlapping leases), and **reconciliation** (staged rows = mart rows + rejected rows) |
 | `test_planted_issues.py` | **Known-answer tests:** the pipeline caught *exactly* the records the generator corrupted — compared by ID, not just count, so a check can't pass by catching the wrong records |
 | `test_governance.py` | No PII columns in any mart table |
+| `test_ml.py` | Model features keep the lease grain, contain no outcome columns, and every active lease gets exactly one valid score |
 
 Each planted issue gets the handling it deserves:
 
@@ -105,6 +106,39 @@ Each planted issue gets the handling it deserves:
 | Missing emails | **Kept and surfaced** — incomplete, not wrong | `dim_residents.has_email_on_file` |
 | Orphan units, backwards dates, invalid rent | **Quarantined** with a reason | `audit.rejected_records` |
 
+## Renewal prediction
+
+**Business question:** which current residents are likely to move out, and what
+drives it? Every move-out means weeks of lost rent plus turnover costs, so early
+warning lets a property team act — for example, by adjusting a renewal offer.
+
+`src/train_model.py` trains on leases that have already ended and scores every
+active lease. Key decisions:
+
+- **Features are limited to what's known before the resident decides.** The
+  script includes a deliberate *data leakage* demo: "rent change on the next
+  lease" pushes test AUC to ~0.99, because a next lease only exists if the
+  resident renewed. It's excluded from the real model, and a test guards
+  against outcome columns ever entering the features table.
+- **Train/test split by time, not at random.** The model learns from leases
+  ending before July 2025 and is tested on later ones — the way it would be used.
+- **The simpler model wins unless the complex one is clearly better.** Logistic
+  regression matches gradient boosting here and its drivers can be explained to
+  a property manager.
+
+| Model | Test AUC |
+|---|---|
+| Always guess the most common outcome | 0.50 |
+| Logistic regression (honest features) | ~0.60 |
+| With the leaky feature (invalid) | ~0.99 |
+
+**Interpreting the result honestly:** renewal decisions are noisy, and an AUC
+around 0.60 is modest. The value is less in individual predictions than in the
+**drivers** (size of the rent increase, maintenance problems) and the **what-if**:
+each extra 2 points of rent increase lowers expected renewals by about 5 points.
+These are associations; proving the offer *causes* move-outs would need an
+experiment, such as randomly varying offers across comparable units.
+
 ## Getting started
 
 ```powershell
@@ -113,7 +147,8 @@ python -m venv .venv
 pip install -r requirements.txt
 python src/generate_data.py      # 1. create the raw source data
 python src/build_models.py       # 2. build the warehouse
-pytest                           # 3. run the data quality tests
+python src/train_model.py        # 3. train the model and score active leases
+pytest                           # 4. run all tests
 
 # Explore with any SQL query:
 python src/query.py "select * from marts.dim_properties"

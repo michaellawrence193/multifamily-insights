@@ -12,6 +12,7 @@ select
     cast(security_deposit as decimal(10, 2))  as security_deposit,
     cast(move_out_date as date)               as move_out_date,
     lease_status,
-    cast(is_renewal as boolean)               as is_renewal
+    cast(is_renewal as boolean)               as is_renewal,
+    cast(renewal_offer_pct as decimal(6, 4))  as renewal_offer_pct
 from raw.leases
 qualify row_number() over (partition by lease_id order by lease_start_date) = 1

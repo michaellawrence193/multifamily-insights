@@ -4,8 +4,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Generated data -- anyone can recreate it with: python src/generate_data.py
+# Generated data and models -- recreate with the commands in the README
 data/
+artifacts/
 
 # Editor / OS files
 .vscode/

@@ -185,6 +185,10 @@ def make_leases_and_residents(units: pd.DataFrame):
                 "move_out_date": None,
                 "lease_status": "Active" if end >= AS_OF_DATE else None,
                 "is_renewal": bool(current != tenure_start),
+                # The rent increase offered for renewing. Property teams send
+                # this ~60-90 days before the lease ends -- BEFORE the resident
+                # decides -- so it's fair game for a prediction model.
+                "renewal_offer_pct": None,
             }
             lease_rows.append(lease)
 
@@ -193,6 +197,7 @@ def make_leases_and_residents(units: pd.DataFrame):
 
             # Lease has ended: does the resident renew?
             increase = float(np.clip(rng.normal(0.04, 0.025), -0.02, 0.12))
+            lease["renewal_offer_pct"] = round(increase, 4)
             tenure_years = (end - tenure_start).days / 365
             p_renew = renewal_probability(increase, n_work_orders, tenure_years, unit.bedrooms)
 

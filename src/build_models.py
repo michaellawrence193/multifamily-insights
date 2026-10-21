@@ -12,6 +12,7 @@ Layers (each becomes a schema in the database):
     intermediate  Business-rule checks that flag bad rows instead of dropping them.
     marts         Clean fact and dimension tables that dashboards and models use.
     audit         Every rejected record and the reason it was rejected.
+    ml            Model-ready features for the renewal prediction model.
 
 Run it from the project root (after generate_data.py):
     python src/build_models.py
@@ -44,6 +45,7 @@ BUILD_ORDER = [
     "marts/fct_work_orders",
     "marts/fct_unit_occupancy_monthly",
     "audit/rejected_records",
+    "ml/lease_renewal_features",
 ]
 
 

@@ -6,3 +6,6 @@ Faker>=30.0
 # Phase 2-3: modeling and data quality (installed now so you only do this once)
 duckdb>=1.1
 pytest>=8.0
+
+# Phase 4: machine learning
+scikit-learn>=1.5
