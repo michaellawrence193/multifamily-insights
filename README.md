@@ -6,7 +6,7 @@ lease-renewal prediction model, and an interactive dashboard.
 
 > **Status:** Phase 5 of 6 complete — from raw data to a live dashboard.
 >
-> **Live dashboard:** _add your Streamlit link here_
+> **Live dashboard:** (https://multifamily-insights.streamlit.app/)
 
 ## Why this project
 
