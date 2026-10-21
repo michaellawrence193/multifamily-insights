@@ -4,7 +4,9 @@ An end-to-end analytics engineering project for a fictional 8-property, 960-unit
 apartment portfolio: from messy source-system data to tested data models, a
 lease-renewal prediction model, and an interactive dashboard.
 
-> **Status:** Phase 4 of 6 complete — source data, SQL models, data quality tests, and a lease-renewal prediction model.
+> **Status:** Phase 5 of 6 complete — from raw data to a live dashboard.
+>
+> **Live dashboard:** _add your Streamlit link here_
 
 ## Why this project
 
@@ -23,7 +25,7 @@ prediction → a product people use to decide.**
 | 2 | Model it into clean fact and dimension tables, with documented grain and keys | SQL, DuckDB | ✅ |
 | 3 | Automated data quality tests that catch every planted issue | pytest | ✅ |
 | 4 | Predict which residents are at risk of not renewing | scikit-learn | ✅ |
-| 5 | Interactive dashboard: occupancy, rent trends, renewal risk | Streamlit | ⬜ |
+| 5 | Interactive dashboard: occupancy, rent trends, renewal risk | Streamlit | ✅ |
 | 6 | Let an AI assistant query the portfolio through an MCP server | MCP | ⬜ |
 
 ## The source data
@@ -139,6 +141,21 @@ each extra 2 points of rent increase lowers expected renewals by about 5 points.
 These are associations; proving the offer *causes* move-outs would need an
 experiment, such as randomly varying offers across comparable units.
 
+## Dashboard
+
+`src/dashboard.py` is a Streamlit app with three tabs:
+
+- **Portfolio overview:** occupancy and rent trends, renewal rate, and a by-property table.
+- **Renewal risk:** every active lease scored by the model, a list of leases ending in the
+  next 90 days ranked by risk, and a **what-if slider** for the renewal offer. Moving the
+  offer from 4% to 6% raises expected move-outs by about 44 and *lowers* monthly rent from
+  renewing residents — before counting turnover costs.
+- **Data quality:** how many records were received, deduplicated, quarantined and used,
+  plus the quarantine list and known limitations.
+
+On a fresh deploy the app runs the whole pipeline itself, which works because the
+generated data is reproducible from a fixed seed.
+
 ## Getting started
 
 ```powershell
@@ -149,6 +166,7 @@ python src/generate_data.py      # 1. create the raw source data
 python src/build_models.py       # 2. build the warehouse
 python src/train_model.py        # 3. train the model and score active leases
 pytest                           # 4. run all tests
+streamlit run src/dashboard.py   # 5. open the dashboard
 
 # Explore with any SQL query:
 python src/query.py "select * from marts.dim_properties"
