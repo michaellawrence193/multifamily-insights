@@ -4,7 +4,7 @@ An end-to-end analytics engineering project for a fictional 8-property, 960-unit
 apartment portfolio: from messy source-system data to tested data models, a
 lease-renewal prediction model, and an interactive dashboard.
 
-> **Status:** Phase 5 of 6 complete — from raw data to a live dashboard.
+> **Status:** All 6 phases complete — from raw data to a live dashboard and an AI-queryable data product.
 >
 > **Live dashboard:** [multifamily-insights.streamlit.app](https://multifamily-insights.streamlit.app/)
 
@@ -26,7 +26,7 @@ prediction → a product people use to decide.**
 | 3 | Automated data quality tests that catch every planted issue | pytest | ✅ |
 | 4 | Predict which residents are at risk of not renewing | scikit-learn | ✅ |
 | 5 | Interactive dashboard: occupancy, rent trends, renewal risk | Streamlit | ✅ |
-| 6 | Let an AI assistant query the portfolio through an MCP server | MCP | ⬜ |
+| 6 | Let an AI assistant query the portfolio through an MCP server | MCP | ✅ |
 
 ## The source data
 
@@ -89,7 +89,7 @@ a unit look vacant for months it was really occupied.
 
 ## Data quality tests
 
-`pytest` runs 47 tests against the warehouse in under a second. Each one is a
+`pytest` runs 64 tests against the warehouse in a few seconds. Each one is a
 SQL query that should return zero problem rows.
 
 | Test file | What it checks |
@@ -97,6 +97,7 @@ SQL query that should return zero problem rows.
 | `test_marts.py` | **Grain** (keys unique and not null), **referential integrity** (no orphan foreign keys), **accepted values**, **business rules** (no backwards dates, no overlapping leases), and **reconciliation** (staged rows = mart rows + rejected rows) |
 | `test_planted_issues.py` | **Known-answer tests:** the pipeline caught *exactly* the records the generator corrupted — compared by ID, not just count, so a check can't pass by catching the wrong records |
 | `test_governance.py` | No PII columns in any mart table |
+| `test_mcp_server.py` | The AI can't reach raw or staging data, PII, files, or write anything; curated tools match the warehouse |
 | `test_ml.py` | Model features keep the lease grain, contain no outcome columns, and every active lease gets exactly one valid score |
 
 Each planted issue gets the handling it deserves:
@@ -155,6 +156,53 @@ experiment, such as randomly varying offers across comparable units.
 
 On a fresh deploy the app runs the whole pipeline itself, which works because the
 generated data is reproducible from a fixed seed.
+
+## AI access (MCP server)
+
+`src/mcp_server.py` is a [Model Context Protocol](https://modelcontextprotocol.io)
+server, so an AI assistant like Claude can answer questions about the portfolio
+in plain English: *"Which property has the lowest occupancy?"*, *"What happens to
+renewals at a 6% offer?"*
+
+| Tool | What it does |
+|---|---|
+| `portfolio_summary` | Occupancy, rent, renewal rate, open work orders — with metric definitions |
+| `renewal_what_if` | Expected renewals and rent at any offer, vs. the standard 4% |
+| `at_risk_leases` | Upcoming lease expirations, riskiest first |
+| `list_tables` | Every available table with its documented grain and columns |
+| `run_sql` | Read-only SQL for anything the curated tools don't cover |
+
+Designed to be reliable and safe for an AI consumer:
+
+- **Curated metrics.** Standard numbers are computed one fixed way, with
+  definitions in the result, so the AI's answers match the dashboard instead of
+  improvising a formula each time.
+- **Self-describing data.** `list_tables` returns the grain documented at the top of
+  each SQL model, so the AI knows what a row means before it writes a query.
+- **Governance by construction.** `run_sql` runs against an in-memory copy of only
+  the `marts`, `ml` and `audit` layers. Resident names, emails and birth dates live in
+  `raw`/`staging`, which are never copied in, so they can't be reached at all. File
+  access is disabled, and only single `SELECT` statements are accepted. Tests verify
+  each rule.
+
+### Connect it to Claude Desktop
+
+Add this to `claude_desktop_config.json` (on Windows: `%APPDATA%\Claude\`), using
+your own absolute paths, then fully quit and reopen Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "multifamily-portfolio": {
+      "command": "C:\\path\\to\\multifamily-insights\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\path\\to\\multifamily-insights\\src\\mcp_server.py"]
+    }
+  }
+}
+```
+
+The server loads a snapshot of the warehouse at startup; restart Claude Desktop
+after rebuilding the data.
 
 ## Getting started
 

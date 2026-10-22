@@ -12,3 +12,6 @@ scikit-learn>=1.5
 
 # Phase 5: dashboard
 streamlit>=1.40
+
+# Phase 6: AI access via MCP
+mcp>=2.2
